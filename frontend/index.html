@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AutoGrader — GWA & Academic Honors Evaluator</title>
+    <meta name="description" content="Upload your Certificate of Matriculation and instantly calculate your GWA and academic honors standing." />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+                    colors: {
+                        surface: { 1: 'rgba(255,255,255,0.03)', 2: 'rgba(255,255,255,0.06)', 3: 'rgba(255,255,255,0.09)' },
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.5s ease-out forwards',
+                        'slide-up': 'slideUp 0.6s ease-out forwards',
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4,0,0.6,1) infinite',
+                        'shimmer': 'shimmer 2s linear infinite',
+                    },
+                    keyframes: {
+                        fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+                        slideUp: { '0%': { opacity: '0', transform: 'translateY(24px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
+                        shimmer: { '0%': { backgroundPosition: '-200% 0' }, '100%': { backgroundPosition: '200% 0' } },
+                    },
+                },
+            },
+        };
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <style>
+        body { font-family: 'Inter', system-ui, sans-serif; background: #0a0f1a; }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(99,230,190,0.2); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(99,230,190,0.4); }
+        /* Glass card */
+        .glass { background: rgba(15,23,42,0.6); backdrop-filter: blur(24px) saturate(1.4); border: 1px solid rgba(99,230,190,0.08); }
+        .glass-bright { background: rgba(15,23,42,0.75); backdrop-filter: blur(32px) saturate(1.6); border: 1px solid rgba(99,230,190,0.12); }
+        /* Gradient text */
+        .grad-text { background: linear-gradient(135deg, #63e6be 0%, #38d9a9 30%, #22d3ee 70%, #67e8f9 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+        /* Upload zone */
+        .upload-zone { transition: all 0.3s ease; }
+        .upload-zone.dragover { border-color: #63e6be !important; background: rgba(99,230,190,0.06) !important; transform: scale(1.01); }
+        /* Table inputs */
+        .cell-input { background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 4px 8px; color: #e2e8f0; transition: all 0.2s; width: 100%; }
+        .cell-input:hover { border-color: rgba(99,230,190,0.2); }
+        .cell-input:focus { outline: none; border-color: #63e6be; background: rgba(99,230,190,0.05); box-shadow: 0 0 0 3px rgba(99,230,190,0.1); }
+        .cell-input.flagged { border-color: #f59e0b; background: rgba(245,158,11,0.08); }
+        /* Row hover */
+        .subject-row { transition: background 0.2s; }
+        .subject-row:hover { background: rgba(99,230,190,0.04); }
+
+        /* Badge pulse ring */
+        .badge-ring { box-shadow: 0 0 0 0 rgba(99,230,190,0.4); animation: ringPulse 2s ease-out infinite; }
+        @keyframes ringPulse { 0% { box-shadow: 0 0 0 0 rgba(99,230,190,0.4); } 70% { box-shadow: 0 0 0 12px rgba(99,230,190,0); } 100% { box-shadow: 0 0 0 0 rgba(99,230,190,0); } }
+        /* Shimmer loading */
+        .shimmer-bg { background: linear-gradient(90deg, rgba(99,230,190,0.05) 25%, rgba(99,230,190,0.12) 50%, rgba(99,230,190,0.05) 75%); background-size: 200% 100%; }
+        /* Button glow */
+        .btn-glow { position: relative; overflow: hidden; }
+        .btn-glow::after { content: ''; position: absolute; inset: -2px; background: linear-gradient(135deg, #63e6be, #22d3ee, #63e6be); border-radius: inherit; z-index: -1; opacity: 0; transition: opacity 0.3s; }
+        .btn-glow:hover::after { opacity: 0.5; }
+        /* Ambient bg glow */
+        .ambient-glow { position: fixed; pointer-events: none; border-radius: 50%; filter: blur(120px); opacity: 0.15; z-index: 0; }
+    </style>
+</head>
+<body class="min-h-screen text-gray-200 relative overflow-x-hidden">
+
+    <!-- Ambient background glows -->
+    <div class="ambient-glow w-[600px] h-[600px] bg-emerald-500/30 -top-[200px] -left-[200px]"></div>
+    <div class="ambient-glow w-[500px] h-[500px] bg-cyan-500/20 top-[40%] -right-[200px]"></div>
+    <div class="ambient-glow w-[400px] h-[400px] bg-teal-500/15 bottom-[0] left-[30%]"></div>
+
+    <div class="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
+
+        <!-- ====== HEADER ====== -->
+        <header class="text-center mb-10 animate-fade-in">
+            <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full glass text-xs font-medium text-emerald-300/80 mb-4 tracking-wide">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                ACADEMIC EVALUATION SYSTEM
+            </div>
+            <h1 class="text-4xl sm:text-5xl font-black grad-text tracking-tight mb-3">AutoGrader</h1>
+            <p class="text-gray-400 text-sm sm:text-base max-w-xl mx-auto leading-relaxed">
+                Upload your Certificate of Matriculation to instantly compute your <strong class="text-gray-300">GWA</strong> and evaluate your <strong class="text-gray-300">Academic Honors</strong> standing.
+            </p>
+        </header>
+
+        <!-- ====== UPLOAD ZONE ====== -->
+        <section id="upload-section" class="mb-8 animate-slide-up" style="animation-delay: 0.1s">
+            <div id="upload-zone"
+                 class="upload-zone glass rounded-2xl p-8 sm:p-12 text-center cursor-pointer border-2 border-dashed border-gray-700/60 hover:border-emerald-500/40 transition-all group"
+                 role="button" tabindex="0" aria-label="Upload COM image">
+                <div id="upload-idle">
+                    <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-emerald-500/10 to-cyan-500/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <svg class="w-8 h-8 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                    </div>
+                    <p class="text-gray-300 font-semibold mb-1">Drop your COM image here</p>
+                    <p class="text-gray-500 text-sm">or <span class="text-emerald-400 underline underline-offset-2">click to browse</span> — PNG, JPG, WebP up to 20 MB</p>
+                </div>
+                <div id="upload-loading" class="hidden">
+                    <div class="w-16 h-16 mx-auto mb-4 rounded-2xl shimmer-bg animate-shimmer flex items-center justify-center">
+                        <svg class="w-8 h-8 text-emerald-400 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                    </div>
+                    <p class="text-emerald-300 font-semibold mb-1">Processing your COM…</p>
+                    <p class="text-gray-500 text-sm">Extracting subjects via AI vision — this may take a moment</p>
+                </div>
+            </div>
+            <input type="file" id="file-input" accept="image/png,image/jpeg,image/webp" class="hidden" />
+        </section>
+
+        <!-- ====== ERROR BANNER ====== -->
+        <div id="error-banner" class="hidden mb-6 animate-fade-in">
+            <div class="glass rounded-xl p-4 border-l-4 border-red-500 flex items-start gap-3">
+                <svg class="w-5 h-5 text-red-400 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <div>
+                    <p class="text-red-300 font-semibold text-sm">Error</p>
+                    <p id="error-text" class="text-red-400/80 text-sm mt-0.5"></p>
+                </div>
+                <button onclick="hideError()" class="ml-auto text-red-400/60 hover:text-red-300 transition-colors">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- ====== RESULTS BADGES ====== -->
+        <section id="results-section" class="hidden mb-8 animate-slide-up">
+
+            <!-- Manual input warning -->
+            <div id="manual-warning" class="hidden mb-5">
+                <div class="glass rounded-xl p-4 border-l-4 border-amber-500 flex items-start gap-3">
+                    <svg class="w-5 h-5 text-amber-400 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
+                    <div>
+                        <p class="text-amber-300 font-semibold text-sm">Manual Input Required</p>
+                        <p class="text-amber-400/70 text-sm mt-0.5">Some grades are marked as <strong>INC</strong> or are blank. Please fill in the highlighted fields below and click <strong>Recalculate</strong>.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <!-- GWA Badge -->
+                <div id="badge-gwa" class="glass-bright rounded-2xl p-6 text-center transition-all hover:scale-[1.02]">
+                    <p class="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-2">General Weighted Average</p>
+                    <p id="gwa-value" class="text-4xl font-black grad-text">—</p>
+                </div>
+                <!-- Units Badge -->
+                <div class="glass-bright rounded-2xl p-6 text-center transition-all hover:scale-[1.02]">
+                    <p class="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-2">Total Earned Units</p>
+                    <p id="units-value" class="text-4xl font-black text-gray-100">—</p>
+                </div>
+                <!-- Standing Badge -->
+                <div id="badge-standing" class="glass-bright rounded-2xl p-6 text-center transition-all hover:scale-[1.02]">
+                    <p class="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-2">Academic Standing</p>
+                    <p id="standing-value" class="text-lg font-bold text-gray-100 leading-snug">—</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ====== EDITABLE TABLE ====== -->
+        <section id="table-section" class="hidden mb-8 animate-slide-up" style="animation-delay: 0.15s">
+            <div class="glass-bright rounded-2xl overflow-hidden">
+                <!-- Table header bar -->
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-6 py-4 border-b border-white/5">
+                    <div>
+                        <h2 class="text-lg font-bold text-gray-100">Parsed Subjects</h2>
+                        <p class="text-xs text-gray-500 mt-0.5">Edit any value and click Recalculate.</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button id="btn-add-row"
+                                class="px-4 py-2 rounded-lg text-sm font-semibold bg-white/5 hover:bg-white/10 text-gray-300 hover:text-emerald-300 border border-white/5 hover:border-emerald-500/30 transition-all flex items-center gap-1.5"
+                                onclick="addRow()">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                            Add Row
+                        </button>
+                        <button id="btn-recalc"
+                                class="btn-glow px-5 py-2 rounded-lg text-sm font-semibold bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-lg shadow-emerald-900/30 transition-all flex items-center gap-1.5"
+                                onclick="recalculate()">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                            Recalculate
+                        </button>
+                        <button id="btn-clear"
+                                class="px-4 py-2 rounded-lg text-sm font-semibold bg-white/5 hover:bg-red-500/10 text-gray-400 hover:text-red-400 border border-white/5 hover:border-red-500/30 transition-all"
+                                onclick="clearAll()">
+                            Clear All
+                        </button>
+                    </div>
+                </div>
+                <!-- Table -->
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="text-xs uppercase tracking-wider text-gray-500 border-b border-white/5">
+                                <th class="px-6 py-3 text-left font-semibold w-8">#</th>
+                                <th class="px-4 py-3 text-left font-semibold">Subject Code</th>
+                                <th class="px-4 py-3 text-left font-semibold">Subject Title</th>
+                                <th class="px-4 py-3 text-center font-semibold w-24">Units</th>
+                                <th class="px-4 py-3 text-center font-semibold w-24">Grade</th>
+                                <th class="px-4 py-3 text-center font-semibold w-16">Status</th>
+                                <th class="px-4 py-3 text-center font-semibold w-12"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="subjects-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ====== FOOTER ====== -->
+        <footer class="text-center py-8 text-gray-600 text-xs">
+            <p>AutoGrader &mdash; Academic Evaluation System &copy; 2026</p>
+        </footer>
+    </div>
+
+    <!-- ====== JAVASCRIPT ====== -->
+    <script>
+    (() => {
+        'use strict';
+
+        // ---- State ----
+        let subjects = [];
+
+        // ---- DOM refs ----
+        const uploadZone   = document.getElementById('upload-zone');
+        const fileInput    = document.getElementById('file-input');
+        const uploadIdle   = document.getElementById('upload-idle');
+        const uploadLoading= document.getElementById('upload-loading');
+        const errorBanner  = document.getElementById('error-banner');
+        const errorText    = document.getElementById('error-text');
+        const resultsEl    = document.getElementById('results-section');
+        const tableEl      = document.getElementById('table-section');
+        const tbody        = document.getElementById('subjects-tbody');
+        const gwaValue     = document.getElementById('gwa-value');
+        const unitsValue   = document.getElementById('units-value');
+        const standingValue= document.getElementById('standing-value');
+        const badgeGwa     = document.getElementById('badge-gwa');
+        const badgeStanding= document.getElementById('badge-standing');
+        const manualWarning= document.getElementById('manual-warning');
+
+        // ---- Upload handlers ----
+        uploadZone.addEventListener('click', () => fileInput.click());
+        uploadZone.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') fileInput.click(); });
+        fileInput.addEventListener('change', e => { if (e.target.files.length) handleFile(e.target.files[0]); });
+
+        // Drag & drop
+        ['dragenter','dragover'].forEach(evt =>
+            uploadZone.addEventListener(evt, e => { e.preventDefault(); e.stopPropagation(); uploadZone.classList.add('dragover'); })
+        );
+        ['dragleave','drop'].forEach(evt =>
+            uploadZone.addEventListener(evt, e => { e.preventDefault(); e.stopPropagation(); uploadZone.classList.remove('dragover'); })
+        );
+        uploadZone.addEventListener('drop', e => {
+            const file = e.dataTransfer.files[0];
+            if (file) handleFile(file);
+        });
+
+        // ---- File upload logic ----
+        async function handleFile(file) {
+            if (!['image/png','image/jpeg','image/webp'].includes(file.type)) {
+                showError('Please upload a PNG, JPEG, or WebP image.');
+                return;
+            }
+            if (file.size > 20 * 1024 * 1024) {
+                showError('Image is too large. Maximum size is 20 MB.');
+                return;
+            }
+            hideError();
+            setLoading(true);
+            const form = new FormData();
+            form.append('file', file);
+            try {
+                const res = await fetch('/api/upload-com', { method: 'POST', body: form });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.detail || `Server error ${res.status}`);
+                }
+                const data = await res.json();
+                applyResult(data);
+            } catch (err) {
+                showError(err.message || 'Failed to process the image.');
+            } finally {
+                setLoading(false);
+                fileInput.value = '';
+            }
+        }
+
+        // ---- Recalculate ----
+        window.recalculate = async function() {
+            const currentSubjects = readTableSubjects();
+            if (currentSubjects.length === 0) {
+                showError('No subjects to calculate.');
+                return;
+            }
+            hideError();
+            const btn = document.getElementById('btn-recalc');
+            btn.disabled = true;
+            btn.innerHTML = `<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg> Calculating…`;
+            try {
+                const res = await fetch('/api/calculate-static', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ subjects: currentSubjects }),
+                });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.detail || `Server error ${res.status}`);
+                }
+                const data = await res.json();
+                applyResult(data);
+            } catch (err) {
+                showError(err.message || 'Calculation failed.');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Recalculate`;
+            }
+        };
+
+        // ---- Apply result to UI ----
+        function applyResult(data) {
+            subjects = data.subjects || [];
+            renderTable(subjects);
+            renderBadges(data);
+            resultsEl.classList.remove('hidden');
+            tableEl.classList.remove('hidden');
+            // Smooth scroll to results
+            resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        // ---- Render badges ----
+        function renderBadges(data) {
+            // GWA
+            if (data.gwa !== null && data.gwa !== undefined) {
+                gwaValue.textContent = data.gwa.toFixed(4);
+            } else {
+                gwaValue.textContent = '—';
+            }
+
+            // Units
+            unitsValue.textContent = data.total_units ?? '—';
+
+            // Standing
+            const standing = data.academic_standing || '—';
+            standingValue.textContent = standing;
+
+            // Color coding
+            resetBadgeStyles();
+
+            if (standing.includes("President's Lister")) {
+                badgeGwa.classList.add('border', 'border-yellow-500/30');
+                badgeStanding.classList.add('border', 'border-yellow-500/30');
+                standingValue.classList.add('text-yellow-300');
+                gwaValue.style.background = 'linear-gradient(135deg, #fbbf24, #f59e0b)';
+                gwaValue.style.webkitBackgroundClip = 'text';
+                gwaValue.style.webkitTextFillColor = 'transparent';
+                gwaValue.style.backgroundClip = 'text';
+                badgeStanding.querySelector('p:first-child').classList.add('text-yellow-500/60');
+            } else if (standing.includes("Dean's Lister") && standing.includes("Demoted")) {
+                badgeGwa.classList.add('border', 'border-orange-500/30');
+                badgeStanding.classList.add('border', 'border-orange-500/30');
+                standingValue.classList.add('text-orange-300');
+                gwaValue.style.background = 'linear-gradient(135deg, #fb923c, #f97316)';
+                gwaValue.style.webkitBackgroundClip = 'text';
+                gwaValue.style.webkitTextFillColor = 'transparent';
+                gwaValue.style.backgroundClip = 'text';
+                badgeStanding.querySelector('p:first-child').classList.add('text-orange-500/60');
+            } else if (standing.includes("Dean's Lister")) {
+                badgeGwa.classList.add('border', 'border-emerald-500/30');
+                badgeStanding.classList.add('border', 'border-emerald-500/30');
+                standingValue.classList.add('text-emerald-300');
+                gwaValue.classList.add('grad-text');
+                badgeStanding.querySelector('p:first-child').classList.add('text-emerald-500/60');
+            } else if (standing.includes('Incomplete')) {
+                badgeStanding.classList.add('border', 'border-amber-500/30');
+                standingValue.classList.add('text-amber-300');
+            } else {
+                standingValue.classList.add('text-gray-400');
+            }
+
+            // Manual warning
+            if (data.requires_manual_input) {
+                manualWarning.classList.remove('hidden');
+            } else {
+                manualWarning.classList.add('hidden');
+            }
+        }
+
+        function resetBadgeStyles() {
+            badgeGwa.className = 'glass-bright rounded-2xl p-6 text-center transition-all hover:scale-[1.02]';
+            badgeStanding.className = 'glass-bright rounded-2xl p-6 text-center transition-all hover:scale-[1.02]';
+            standingValue.className = 'text-lg font-bold text-gray-100 leading-snug';
+            gwaValue.className = 'text-4xl font-black grad-text';
+            gwaValue.style = '';
+            // Reset header label colors
+            badgeGwa.querySelector('p:first-child').className = 'text-xs font-semibold uppercase tracking-widest text-gray-500 mb-2';
+            badgeStanding.querySelector('p:first-child').className = 'text-xs font-semibold uppercase tracking-widest text-gray-500 mb-2';
+        }
+
+        // ---- Render editable table ----
+        function renderTable(subjectsArr) {
+            tbody.innerHTML = '';
+            subjectsArr.forEach((s, i) => {
+                const flagged = s.flagged || false;
+                const tr = document.createElement('tr');
+                tr.className = 'subject-row border-b border-white/5';
+                tr.innerHTML = `
+                    <td class="px-6 py-2.5 text-gray-500 font-mono text-xs">${i + 1}</td>
+                    <td class="px-4 py-2.5"><input type="text" class="cell-input font-mono text-xs" value="${escapeHtml(s.subject_code)}" data-field="subject_code" /></td>
+                    <td class="px-4 py-2.5"><input type="text" class="cell-input text-xs" value="${escapeHtml(s.subject_title)}" data-field="subject_title" /></td>
+                    <td class="px-4 py-2.5"><input type="text" class="cell-input text-center text-xs w-20" value="${s.units}" data-field="units" /></td>
+                    <td class="px-4 py-2.5"><input type="text" class="cell-input text-center text-xs w-20 ${flagged ? 'flagged' : ''}" value="${escapeHtml(s.grade)}" data-field="grade" /></td>
+                    <td class="px-4 py-2.5 text-center">
+                        ${flagged
+                            ? '<span class="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full">INC</span>'
+                            : '<span class="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">OK</span>'
+                        }
+                    </td>
+                    <td class="px-4 py-2.5 text-center">
+                        <button onclick="removeRow(${i})" class="text-gray-600 hover:text-red-400 transition-colors p-1 rounded hover:bg-red-500/10" title="Remove row">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // ---- Read table back as subjects ----
+        function readTableSubjects() {
+            const rows = tbody.querySelectorAll('tr');
+            const out = [];
+            rows.forEach(row => {
+                const inputs = row.querySelectorAll('input');
+                if (inputs.length < 4) return;
+                out.push({
+                    subject_code: inputs[0].value.trim(),
+                    subject_title: inputs[1].value.trim(),
+                    units: parseFloat(inputs[2].value) || 0,
+                    grade: inputs[3].value.trim(),
+                });
+            });
+            return out;
+        }
+
+        // ---- Add row ----
+        window.addRow = function() {
+            subjects.push({ subject_code: '', subject_title: '', units: 3, grade: '', flagged: true });
+            renderTable(subjects);
+            // Focus the new row's first input
+            const lastRow = tbody.lastElementChild;
+            if (lastRow) lastRow.querySelector('input')?.focus();
+        };
+
+        // ---- Remove row ----
+        window.removeRow = function(index) {
+            subjects = readTableSubjects();
+            subjects.splice(index, 1);
+            subjects = subjects.map(s => ({
+                ...s,
+                flagged: isGradeFlagged(s.grade),
+            }));
+            renderTable(subjects);
+        };
+
+        // ---- Clear all ----
+        window.clearAll = function() {
+            subjects = [];
+            tbody.innerHTML = '';
+            resultsEl.classList.add('hidden');
+            tableEl.classList.add('hidden');
+            manualWarning.classList.add('hidden');
+            hideError();
+            gwaValue.textContent = '—';
+            unitsValue.textContent = '—';
+            standingValue.textContent = '—';
+        };
+
+
+        function isGradeFlagged(grade) {
+            const g = (grade || '').trim();
+            return g === '' || g.toUpperCase() === 'INC';
+        }
+
+        function setLoading(on) {
+            uploadIdle.classList.toggle('hidden', on);
+            uploadLoading.classList.toggle('hidden', !on);
+            uploadZone.style.pointerEvents = on ? 'none' : 'auto';
+        }
+
+        function showError(msg) {
+            errorText.textContent = msg;
+            errorBanner.classList.remove('hidden');
+        }
+
+        window.hideError = function() {
+            errorBanner.classList.add('hidden');
+        };
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str || '';
+            return div.innerHTML;
+        }
+    })();
+    </script>
+</body>
+</html>
